@@ -309,8 +309,10 @@ TSWLatexianTemp*
 # latexmk
 build/
 
-# The output
+# Output PDF file
 thesis.pdf
 
-# The template
-bsc-msc-latex-template-master/**
+# IDE settings
+.vscode/**
+.idea/**
+*.code-workspace

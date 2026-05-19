@@ -4,11 +4,9 @@
 
 This repository contains my bachelor’s thesis, which focuses on extending the CMa virtual machine (an abstract stack-based machine) implemented in Java to support function calls. The work is presented as a LaTeX project and combines theoretical analysis with practical implementation.
 
-
 ## Motivation
 
 The motivation for this work comes from a deep interest in compilers, virtual machines, and the execution of imperative programming languages. The project is closely related to the University of Tartu course "Automaadid, keeled, translaatorid" ("Automata, Languages, Translators"), which covers the theoretical foundations of computation and translation mechanisms. This thesis continues those concepts in practice by extending the CMa virtual machine to support function calls, a key feature for modeling real program control flow.
-
 
 ## Goal
 
@@ -18,7 +16,6 @@ The main goal of this thesis is to extend the CMa virtual machine in Java by add
 - Introducing stack frame management and additional registers (frame pointer, extreme pointer, heap pointer)
 - Ensuring correct handling of nested and recursive calls
 - Maintaining compatibility with existing instructions and programs
-
 
 ## Implementation
 

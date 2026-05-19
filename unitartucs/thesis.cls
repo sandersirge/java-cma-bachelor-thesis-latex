@@ -141,8 +141,10 @@
 \usepackage{minted}
 \setminted{
     frame=single,
-    framesep=10pt,
+    framesep=5pt,
     fontsize=\footnotesize,
+    xleftmargin=0pt,
+    tabsize=2,
 }
 
 % Matemaatilised valemid

@@ -1,0 +1,61 @@
+﻿\section{Tulemused, analüüs ja arutelu}\label{tulemused}
+
+Järgmisena hinnatakse käesolevas peatükis, kas püstitatud eesmärgid said saavutatud. Siin koondatakse testimise tulemused, analüüsitakse funktsioonikutsete toe lisamise mõju \textsc{CMa} simulaatori käitumisele ning võrreldakse saavutatut nii algsete nõuete kui ka võimalike sarnaste lahendustega. Lisaks tehnilisele õigsusele on oluline hinnata, kui usaldusväärselt ja milliste meetoditega kvaliteet tagati, sest rakendusliku töö väärtus ei seisne ainult implementeerimises, vaid ka selle põhjendatud verifitseerimises~\cite{briand_empirical_2004}. Töö tulemusena sai \texttt{java-cma} privaatse koodihoidla tõmbekutse (ingl \emph{pull request}\footnote{\url{https://akit.cyber.ee/term/16710-pull-request}}) põhjal lisatud umbes 1250 uut rida koodi ning eemaldatud 5\footnote{\url{https://github.com/sws-lab/java-cma/pull/2}}. Järgnevalt on estitatud tulemused ja nende analüüs.
+
+\subsection{Testimine ja katsetulemused}\label{tulemused:testimine}
+
+Testimine järgis peatükis~\ref{implementatsioon:nouded} sõnastatud kolmeastmelist strateegiat, milles kõik kolm realiseeriti JUnit 4 testidena Gradle'i ehitusahelas.
+
+\subsubsection{Testide ülevaade}
+
+Kokku sisaldab testiklass \texttt{CMaInterpreterTest} 46 testmeetodit (10 algset ja 36 uut), mis jagunevad järgnevalt:
+
+\begin{itemize}
+	\item {Üksuste testid (18 testi)} kontrollivad üksikute uute käskude lokaalset semantikat. Iga test koostab minimaalse \textsc{CMa} programmi, mis seab teadaoleva pinu- ja registrioleku, täidab ühe uue käsu ning kontrollib tulemust:
+	\begin{itemize}
+		\item \texttt{test\_alloc\_empty}, \texttt{test\_alloc\_after\_loadc} - \texttt{ALLOC} käsk nulliga algväärtustatud pesadega.
+		\item \texttt{test\_loadrc}, \texttt{test\_loadr}, \texttt{test\_storer} - FP-suhtelised pöördumised.
+		\item \texttt{test\_mark\_call} - täitmisraami ettevalmistus ja funktsiooni aktiveerimine.
+		\item \texttt{test\_enter}, \texttt{test\_enter\_in\_function} - piirviida seadmine, sh funktsiooni kontekstis.
+		\item \texttt{test\_call\_return}, \texttt{test\_call\_return\_with\_locals} - terviklik kutsumine ja tagastamine.
+		\item \texttt{test\_slide}, \texttt{test\_slide\_multiple\_values}, \texttt{test\_slide\_zero}, \texttt{test\_slide\_m\_zero} - \texttt{SLIDE} erinevate parameetrikombinatsioonidega.
+		\item \texttt{test\_jumpi}, \texttt{test\_jumpi\_index1}, \texttt{test\_jumpi\_index2} - indekseeritud hüpe.
+	\end{itemize}
+
+	\item {Integratsioonitestid (18 testi)} käivitavad terviklikke \textsc{CMa} programme, mis kasutavad kõiki uusi käske koos:
+	\begin{itemize}
+		\item \texttt{test\_non\_recursive\_inc\_0}, \texttt{test\_non\_recursive\_inc\_9}, \texttt{test\_non\_recursive\_inc\_41}, \texttt{test\_non\_recursive\_inc\_neg} - lihtne mitte-rekursiivne funktsioonikutse erinevate sisenditega.
+		\item \texttt{test\_recursive\_fac\_0}, \texttt{test\_recursive\_fac\_1}, \texttt{test\_recursive\_fac\_5}, \texttt{test\_recursive\_fac\_10} - rekursiivne faktoriaal erinevate sisendväärtustega, sh äärejuhtumid.
+		\item \texttt{test\_dispatch\_inc}, \texttt{test\_dispatch\_double} - mitme haruga programm \texttt{JUMPI}, \texttt{LOADRC} ja \texttt{SLIDE 0 1} kasutamisega.
+		\item \texttt{test\_void\_return\_0}, \texttt{test\_void\_return\_3}, \texttt{test\_void\_return\_neg} - void-tagastusega funktsioon lokaalse arvutusega, kus tagastusväärtust kasutatakse kutsujapoolselt.
+		\item \texttt{test\_fibo\_neg}, \texttt{test\_fibo\_0}, \texttt{test\_fibo\_1}, \texttt{test\_fibo\_5}, \texttt{test\_fibo\_7} - rekursiivne Fibonacci arvutus, mis testib kahekordset pesastatud rekursiooni.
+	\end{itemize}
+
+	\item {Regressioonitestid (10 testi)} moodustavad algse testikogu, mis kontrollib aritmeetika-, mälupöördus- ja juhtvooprogrammide jätkuvat korrektsust: \texttt{test1}-\texttt{test6}, \texttt{test2b} ning veatestid \texttt{test\_missing\_label} ja \texttt{test\_multiple\_label}. Need testid käivitati pärast iga muudatust, tagamaks, et uue funktsionaalsuse lisamine ei rikkunud senist käitumist.
+\end{itemize}
+
+Kõik 46 testi sooritati edukalt. Regressioonitestide jätkuv läbimine kinnitab, et laiendus ei muutnud ühtki olemasolevat instruktsiooni semantikat.
+
+\subsubsection{Testoraakli allikas}
+
+Iga testi oodatav tulemus tuletati otse peatüki formaalsetest definitsioonidest~\cite{wilhelm_imperative_2010}. Üksuste testide puhul on oraakli aluseks instruktsiooni semantika (nt joonis~2.26 peatükis \texttt{MARK} jaoks). Integratsioonitestide puhul kasutati peatüki läbitöötatud näiteid (nt näide~2.9.6 rekursiivse faktoriaali jaoks). Selline spetsifikatsioonipõhine oraakli valik on kooskõlas Briand ja Labiche~\cite{briand_empirical_2004} soovitusega, et testimistehnika peab arvestama testitava tarkvara eripäradega - interpretaatori puhul on formaalne semantika parim olemasolev oraakli allikas.
+
+\subsection{Tulemuste analüüs}\label{tulemused:analuus}
+
+Jaotises~\ref{implementatsioon:nouded} sõnastati 14 funktsionaalset nõuet ja 4 mittefunktsionaalset nõuet.
+
+Kõik 14 funktsionaalset nõuet said täidetud: käsud \texttt{MARK}, \texttt{CALL}, \texttt{ENTER}, \texttt{ALLOC}, \texttt{LOADRC}, \texttt{LOADR}, \texttt{STORER}, \texttt{RETURN}, \texttt{SLIDE} ja \texttt{JUMPI} (F1-F10) on realiseeritud ja üksuste testidega verifitseeritud. Stsenaariumite nõuded (F11-F14) on kaetud integratsioonitestidega, mis käivitavad terviklikke programme koos pesastatud ja rekursiivsete väljakutsetega.
+
+Tagasiühilduvus (ingl \emph{backward compatibility}\footnote{\url{https://akit.cyber.ee/term/5769-backward-compatibility}}) on kinnitatud 10 regressioonitesti jätkuva läbimisega. Arhitektuurne lokaalsus on tagatud sellega, et muudatused puudutavad ainult nelja klassi (\texttt{CMaInterpreter}, \texttt{CMaStack}, \texttt{CMaIntIntInstruction} ja olemasolevad instruktsiooniloendeid) ning ei muuda olemasolevate klasside avalikku liidest. Minimaalne ressursimahu nõue on täidetud: uusi väliseid sõltuvusi ei lisatud. Loetavuse ja kontrollitavuse nõue on toetatud sellega, et iga uus käsk on realiseeritud eraldi \emph{switch}-avaldise haruna, mille semantika vastab peatüki pseudokoodile.
+
+Jõudlusmõõtmist (nt käskude täitmise aeg, mälukasutus) ei teostatud, sest see ei olnud sõnastatud nõuete hulgas ega ole õpetuslikule simulaatorile iseloomulik kvaliteediparameeter. Samuti ei kontrollitud koodikatvust (ingl \emph{code coverage}) tööriistaga, vaid katvust hinnati käsitsi, veendudes, et iga uus \emph{switch}-avaldise haru on vähemalt ühest testist kaetud.
+
+\subsection{Arutelu ja võrdlus}\label{tulemused:arutelu}
+
+Käesoleva töö kontekstis on võrdlus varasemate lahendustega keerukas, sest algne \textsc{CMa} simulaator on spetsiifiliselt Tartu Ülikooli kursuse jaoks loodud õppevahend, mitte laialdaselt kasutatud tööriist, millel oleks olemas võrreldavad alternatiivid. Seetõttu võrreldakse lahendust pigem üldiste lähenemistega protseduuriliste keelte täitmiskeskkonna implementeerimisel.
+
+Wilhelm ja Seidli peatükis~\cite{wilhelm_imperative_2010} esitatud täitmismudel eeldab eksplitsiitset pinuviita \texttt{SP} ja eraldi kuhjaruumi. Käesolev lahendus kaldub sellest kõrvale, kasutades implitsiitset pinuviita (pinu suurus miinus üks). See lihtsustab algset implementatsiooni, kuid nõuab hoolikat $+1$ nihke arvestamist \texttt{truncate}-kutsetel. Alternatiivne lahendus oleks olnud eksplitsiitse \texttt{SP} registri lisamine, mis oleks muutnud koodi peatükiga üks-ühele vastavusse, kuid nõudnuks kõigi olemasolevate pinuoperatsioonide ümberkirjutamist. Tekiks probleem, kus \texttt{SP} ja \texttt{stack.size()} võivad minna vastuollu.
+
+Teine oluline arhitektuuriotsus oli \texttt{hp} registri algväärtustamine sentinellväärtusega \texttt{Integer.MAX\_VALUE}. See võimaldas kirjutada \texttt{ENTER} ja \texttt{RETURN} kohe lõplikul kujul ning vastab Jalote~\cite{jalote_coding_2025} soovitusele planeerida kodeerimist nii, et käsud oleksid spetsifikatsioonile vastavad juba esimesest implementatsioonist alates.
+
+Kokkuvõttes vastab tulemus kõigile sõnastatud nõuetele: kõik 11 uut käsku on implementeeritud, testitud ja dokumenteeritud. Lahendus säilitab algse projekti loetavuse ning ei moonuta olemasolevat funktsionaalsust.

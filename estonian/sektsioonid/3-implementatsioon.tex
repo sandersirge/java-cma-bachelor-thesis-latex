@@ -1,0 +1,141 @@
+﻿\section{\textsc{CMa} mudeli koodibaas ja laiendamise metoodika}\label{implementatsioon}
+
+Käesolevas peatükis vaadeldakse esmalt olemasoleva \textsc{CMa} koodibaasi ülesehitust, et teha nähtavaks, millistes klassides ja abstraktsioonides masina käitumine tegelikult realiseerub. Seejärel analüüsitakse funktsioonikutsete toe puudumist, sõnastatakse laienduse funktsionaalsed ja mittefunktsionaalsed nõuded ning põhjendatakse metoodikat, mille alusel teostus kavandati.
+
+\subsection{Olemasoleva implementatsiooni kirjeldus}\label{implementatsioon:kirjeldus}
+
+Analüüsitud koodibaas põhineb GitHubi repositooriumil \texttt{java-cma}\footnote{\url{https://github.com/sws-lab/java-cma}} ning sellest loodud \emph{fork}-koopial\footnote{\url{https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/about-forks}} \texttt{java-cma-bachelor-thesis}\footnote{\url{https://github.com/sandersirge/java-cma-bachelor-thesis}}. Projekt on ehitatud Gradle'i\footnote{\url{https://docs.gradle.org}} abil. Arhitektuur jaguneb neljaks selgeks vastutusalaks: programmi sisemine esitus, instruktsioonide tüübid, interpretaatori täitmistsükkel ning programmi lugemist ja kirjutamist toetavad abiklassid. Projekti täielik kataloogistruktuur on esitatud lisas~\hyperref[lisa:projektistruktuur]{A}.
+
+Programmi sisemist esitust kannab klass \texttt{CMaProgram}, mis seob instruktsioonide jada siltide ja nende sihtaadressidega. Instruktsioonide loomist lihtsustab \texttt{CMaProgramWriter}, tekstifailist lugemist aga \texttt{CMaProgramParser}. Nende ümber paiknevad kaks kasutajale nähtavat sissepääsu: \texttt{CMaDemo}, mis genereerib ja käivitab näidisprogrammi, ning \texttt{CMaInterpreterTest}, mis kontrollib olemasolevat käitumist JUnit 4 testidega. Saab järeldada, et projekti arhitektuur on üles ehitatud pigem õpetusliku simulatsiooni kui tööstusliku käituskeskkonna loogika järgi: oluline on, et iga osa oleks väike, läbipaistev ja eraldi loetav.
+
+Täitmise seisukohalt on keskne klass \texttt{CMaInterpreter}, mille olek koosneb programmist, programmiloendurist ja ühest täitmise käigus muudetavast pinust:
+
+\begin{minted}{java}
+private final CMaProgram program;
+private int pc = 0;
+private final CMaStack stack;
+
+private CMaStack execute() {
+	while (0 <= pc && pc < program.instructions().size()) {
+		CMaInstruction<?> instruction = program.instructions().get(pc);
+		pc++;
+		execute(instruction);
+	}
+	return stack;
+}
+\end{minted}
+
+Selline lahendus realiseerib peatükis~\ref{taust:CMa:taitmistsukkel} kirjeldatud põhimõtet: instruktsioon loetakse programmi loendist, programmiloendurit suurendatakse ning seejärel rakendatakse vastav olekumuutus. Arhitektuuriline eelis on lihtsus, mis väljendub selles, et kogu käitusloogika on koondatud ühte interpretaatorisse. Kõik uued semantilised laiendused peavad lõpuks sobituma samasse täitmismudelisse.
+
+Instruktsioonid on jaotatud operanditüübi järgi kolme klassi: \texttt{CMaBasicInstruction} katab argumendita käsud, \texttt{CMaIntInstruction} ühe täisarvulise argumendiga käsud ning \texttt{CMaLabelInstruction} sildile viitavad juhtvookäsud. Valik tulenes asjaolust, et Java tüübisüsteem aitab niimoodi vältida olukorda, kus vale käsu juurde antakse vale tüüpi operand. Praegune käsustiku tugi hõlmab aritmeetilisi, loogilisi ja võrdlusoperatsioone teostavaid käske, pinuga seotud käske \texttt{load}, \texttt{store}, \texttt{dup}, \texttt{pop}, konstantide ja aadresside laadimist ning juhtvookäske \texttt{jump} ja \texttt{jumpz}. Seega toetab olemasolev implementatsioon hästi lineaarset avaldiste hindamist, omistamist, tingimuslikke harusid ja tsükleid, kuid mitte veel täitmisraamidega seotud käske.
+
+\subsection{Funktsioonikutsete toe puudumine ja selle mõju}\label{implementatsioon:puudumine}
+
+Funktsioonikutsete toe puudumine ei ole käesolevas koodibaasis juhuslik üksiklünk, vaid tuleneb kogu olemasoleva käitusmudeli teadlikust lihtsustusest. Interpretaatori olekus puuduvad raamipõhise täitmise jaoks vajalikud registrid või nende analoogid, näiteks FP, EP ja HP (vt jaotis~\ref{taust:CMa:malu}). Samuti puudub eraldi täitmisraami mõiste. Kogu muutuv olek on taandatud ühele lineaarsele pinule ning programmiline juhtimine toimub üksnes programmiloenduri muutmise kaudu. See arhitektuur on piisav tsüklite ja tingimuslausete esitamiseks, kuid ei anna veel mehhanismi, millega salvestada tagasipöördumisaadress, ankurdada uus raam ja taastada eelmine kontekst pärast alamprogrammi lõppu.
+
+Toe puudumine on nähtav juba instruktsioonide definitsioonidest. Ühe argumendiga käsud piirduvad konstantide ja absoluutsete aadresside laadimise ning salvestamisega, sildipõhised käsud aga ainult hüpetega:
+
+\begin{minted}{java}
+public enum Code {
+	LOADC,
+	LOADA,
+	STOREA,
+}
+
+public enum Code {
+	JUMP,
+	JUMPZ,
+}
+\end{minted}
+
+Kuna nende hulgas ei ole käske \texttt{mark}, \texttt{call}, \texttt{enter}, \texttt{alloc}, \texttt{return} ega \texttt{slide}, ei saa parser, programmi koostaja ega interpretaator selliseid instruktsioone praegu isegi väljendada. Põhjus on seega korraga arhitektuuriline ja tehniline: arhitektuur ei hoia alles väljakutseteks vajalikku konteksti ning tehniline teostus ei tunne vastavaid käsukoode.
+
+Praktiline piirang avaldub selles, et ka mitmeetapiline juhtvoog tuleb kirjutada ühe taseme peale laotatud käsujadana. Näiteks olemasolev demonstratsiooniprogramm kirjeldab kordust siltide ja hüpetega, mitte korduskasutatava alamprogrammina:
+
+\begin{minted}{java}
+CMaLabel _while = new CMaLabel();
+CMaLabel _end = new CMaLabel();
+
+pw.visit(_while);
+pw.visit(LOADA, 1);
+pw.visit(LOADA, 0);
+pw.visit(LEQ);
+pw.visit(JUMPZ, _end);
+...
+pw.visit(JUMP, _while);
+pw.visit(_end);
+\end{minted}
+
+Niisugune esitus töötab seni, kuni kogu programm saab paikneda ühes sirgjoonelises instruktsioonijadas. Probleem tekib, kui sama loogikat oleks vaja kasutada mitmes kohas või pesastada. Ilma funktsioonikutseteta tuleb korduv loogika dubleerida või modelleerida käsitsi siltide ja hüpetega, mis muudab programmid pikemaks, raskemini loetavaks ning semantiliselt kaugemaks sellest protseduurilisest lähtekoodist, mida \textsc{CMa} peaks õpetusliku masinana selgitama. Seetõttu piirab toe puudumine simulaatori väljendusjõudu.
+
+\subsection{Laiendamise metoodika ja analüüs}\label{implementatsioon:metoodika}
+
+Laienduse teostamise aluseks valiti struktureeritud ehk järjestikune arendusmeetod, kus nõuete analüüs, kavandamine, implementeerimine ja testimine sooritati selgelt eristuvate järjestikuste sammudena. Mishra ja Alzoubi~\cite{mishra_structured_2023} võrdlevad struktureeritud ja agiilseid lähenemisi ning järeldavad, et universaalse parima meetodi otsimise asemel on produktiivsem küsida, milline metoodika on konkreetse projekti jaoks kõige tõhusam. Autorite esitatud otsustuspuu soosib struktureeritud lähenemist olukordades, kus nõuded on hästi defineeritud ja stabiilsed, projekti skoop on selgelt piiritletud ning faaside vahel esinevad sõltuvused~\cite{mishra_structured_2023}. Kõik tingimused kehtisid käesoleva töö puhul: kogu nõuete allikas oli formaalne spetsifikatsioon~\cite{wilhelm_imperative_2010} ning nõuete avastamist ei toimunud töö vältel.
+
+Samal ajal kasutati faasi sees sammhaaval lähenemist: iga samm lisas väikse hulga instruktsioone koos kohe järgnevate testidega. Jalote~\cite{jalote_coding_2025} rõhutab, et kodeerimine mõjutab oluliselt nii testimist kui ka hooldatavust ning soovitab inkrementaalset arendust koos iga sammu järgse verifitseerimisega. See lähenemine tagas, et vead avastati võimalikult lähedal nende sissetoomise kohale. Xiangdong jt~\cite{xiangdong_effective_2023} kirjeldavad analoogset pedagoogilist mudelit kompilaatorite õpetamisel: mõiste tutvustamine, formaalse definitsiooni esitamine, implementeerimine ja verifitseerimine. Mudel vastas käesoleva töö arendusplaani ülesehitusele, kus iga samm seostub ühe raamatu kontseptsiooniga.
+
+Java jäi sobivaks teostuskeeleks seetõttu, et kogu algne simulaator oli juba mainitud keeles realiseeritud ning selle asendamine mõne teise keelega oleks tähendanud pigem uue tööriista loomist kui olemasoleva töö laiendamist. Lisaks võimaldavad Java tüübisüsteem, kirjete kasutamine instruktsioonide kirjeldamisel ning Gradle'i ja JUniti valmis ahel hoida muudatused kontrollitavana. Koodibaasi analüüs, navigeerimine ja muudatuste kavandamine viidi läbi IntelliJ IDEA arenduskeskkonnas\footnote{\url{https://www.jetbrains.com/idea/}}; see oli oluline seetõttu, et projektis tuli jälgida seoseid interpretaatori, parseri, instruktsioonide ja testide vahel.
+
+Alternatiivina oleks olnud võimalik realiseerida funktsioonikutsed Java enda meetodikutsungite või rekursiivse interpretaatoriloogika kaudu. Selline lahendus oleks olnud tehniliselt teostatav, kuid see oleks peitnud olulise osa \textsc{CMa} olekumuutustest Java käituskeskkonna sisse. Töö eesmärk ei olnud näidata, kuidas Java käitub, vaid kuidas \textsc{CMa} masin käitub. Samal põhjusel lükati tagasi mõte hoida eraldi kutsepinu (ingl \emph{call stack}\footnote{\url{https://akit.cyber.ee/term/2344-call-stack}}) mõnes uues andmestruktuuris: kuigi see oleks teinud programmeerimise mugavamaks, eemaldunuks see peatükis~\ref{taust:CMa} kirjeldatud pinu- ja raamiloogikast. Samuti ei olnud põhjendatud kogu instruktsioonisüsteemi täielik ümberkirjutus polümorfseks käsuhierarhiaks, sest olemasolev tüüpide ja \emph{switch}-avaldise kombinatsioon oli väikese projekti jaoks piisavalt selge ning uue semantika lisamine sinna oli lihtsam kui täielik arhitektuurimuutus.
+
+Selles töös valitud lähenemine parandab senise simulaatori semantilisi puudusi, laiendades olemasolevat õpetuslikku mudelit olulise protseduurilise mehhanismiga ning säilitades samal ajal algse projekti loetavuse ja senise käsustiku töökindluse. Ressursimahu mõttes oli see mõistlik kompromiss: kõige suurem töö ei seisnenud uute tehnoloogiate kasutuselevõtus, vaid selles, et teoreetiline väljakutsemudel tuli sobitada olemasoleva ühe pinu ümber ehitatud interpretaatoriga.
+
+\subsection{Nõuded laiendusele}\label{implementatsioon:nouded}
+
+Eelnevast analüüsist tulenevalt pandi laiendusele paika nii funktsionaalsed kui ka mittefunktsionaalsed nõuded. Funktsionaalselt oli eesmärk viia Java-implementatsioon vastavusse peatükis~\ref{taust:CMa} kirjeldatud väljakutsetsükliga, kuid teha seda viisil, mis sobitub olemasoleva koodibaasi ülesehitusega. Kokku sõnastati 14 funktsionaalset nõuet (tähistatud F1-F14) ja 4 mittefunktsionaalset nõuet (tähistatud MF1-MF4).
+
+Funktsionaalsed nõuded:
+
+\begin{itemize}
+	\item F1: Interpretaator peab realiseerima käsu \verb|mark|, mis salvestab pinusse praeguse piirviida EP ja FP, et kutsutav funktsioon saaks hiljem eelmise konteksti taastada~\cite{wilhelm_imperative_2010}.
+	\item F2: Interpretaator peab realiseerima käsu \verb|call|, mis seab FP praeguse pinuviidaga samasse kohta ning vahetab tagasipöördumisaadressi programmiloenduri väärtusega~\cite{wilhelm_imperative_2010}.
+	\item F3: Interpretaator peab realiseerima käsu \verb|enter m|, mis seab piirviida EP väärtuseks SP~+~m ning tõstab erandi, kui EP~$\geq$~HP~\cite{wilhelm_imperative_2010}.
+	\item F4: Interpretaator peab realiseerima käsu \verb|alloc m|, mis laiendab pinu m nulliga algväärtustatud pesaga kohalike muutujate jaoks~\cite{wilhelm_imperative_2010}.
+	\item F5: Interpretaator peab realiseerima käsu \verb|loadrc j|, mis arvutab FP suhtes aadressi FP~+~j ja laadib selle pinusse~\cite{wilhelm_imperative_2010}.
+	\item F6: Interpretaator peab realiseerima käsu \verb|loadr j m|, mis loeb m väärtust alates aadressilt FP~+~j ja laadib need pinusse~\cite{wilhelm_imperative_2010}.
+	\item F7: Interpretaator peab realiseerima käsu \verb|storer j m|, mis salvestab m väärtust pinust aadressile FP~+~j~\cite{wilhelm_imperative_2010}.
+	\item F8: Interpretaator peab realiseerima käsu \verb|return q|, mis taastab tagasipöördumisaadressi, piirviida EP ning FP ja seab pinuviida valemiga SP~=~FP~$-$~q~\cite{wilhelm_imperative_2010}.
+	\item F9: Interpretaator peab realiseerima käsu \verb|slide q m|, mis nihutab m pealimist pinuväärtust q positsiooni võrra allapoole, eemaldades kasutatuks saanud argumendid pinu keskosast~\cite{wilhelm_imperative_2010}.
+	\item F10: Interpretaator peab realiseerima käsu \verb|jumpi l|, mis arvutab hüppesihtkoha märgendi l sihtaadressi ning pinust loetud indeksi summana~\cite{wilhelm_imperative_2010}.
+	\item F11: Simulaator peab suutma täita programme, kus peaprogramm kutsub välja mitterekursiivse alamprogrammi ja funktsioonist naastakse korrektselt.
+	\item F12: Simulaator peab toetama pesastatud funktsioonikutseid, kus üks alamprogramm kutsub omakorda teist, ning iga kutse kontekst peab taastuma õigesti~\cite{mogensen_programming_2026}.
+	\item F13: Simulaator peab täitma rekursiivse faktoriaalprogrammi korrektselt erinevate sisendväärtuste korral, sealhulgas põhijuhtumis~\cite{wilhelm_imperative_2010}.
+	\item F14: Simulaator peab toetama \verb|jumpi|-põhist hajutuskoodi, kus üks käsk suunab täitmise mitme erineva alamprogrammi vahel indeksi alusel.
+\end{itemize}
+
+Mittefunktsionaalsed nõuded:
+
+\begin{itemize}
+	\item MF1: Olemasolevad programmid, testid ja käsud peavad jääma töötavaks ka pärast laiendust - uus funktsionaalsus ei tohi rikkuda senist käitumist.
+	\item MF2: Muudatused peavad jääma arhitektuuriliselt võimalikult lokaalseks, et koodibaasi läbipaistvus säiliks ega tekiks tarbetult keerukat uut infrastruktuuri.
+	\item MF3: Lahendus peab jääma ressursimahult mõõdukaks: vältida tuleb uusi väliseid sõltuvusi, eraldi käituskihti või täielikku ümberkirjutust, sest töö eesmärk oli laiendada olemasolevat simulaatorit, mitte asendada see uuega.
+	\item MF4: Kood peab jääma loetavaks ja kontrollitavaks, et seda saaks jätkuvalt kasutada õppetöös ning hiljem laiendada ka teiste \textsc{CMa} käskudega seotud tööde jaoks.
+\end{itemize}
+
+Kvaliteedi tagamiseks sõnastati ka testistrateegia. Analüüsitud projektis oli juba olemas Gradle'ile toetuv JUnit 4 testiraamistik, seetõttu oli mõistlik ehitada laienduse kontroll samale vundamendile. Briand ja Labiche~\cite{briand_empirical_2004} toovad välja, et testimistehnika valik peab arvestama testitava tarkvara eripäradega. Interpretaatorite puhul, kus iga instruktsioonil on täpne formaalne semantika (sisendpinu olek $\to$ väljundpinu olek $+$ registrimuutused), on spetsifikatsioonipõhine testimine loomulik valik: testoraakli (ingl \emph{test oracle}) rolli, mis kontrollib tulemuste vastavust oodatavaga\footnote{\url{https://testrigor.com/blog/what-is-test-oracle-in-software-testing/}}, täidab raamatu pseudokood ning iga testjuhtum on formaaldefinitsiooni otsene tõlge.
+
+Joshi ja Kumari~\cite{joshi_analyses_2022} eristavad testimisstrateegiaid (läbimõeldud tegevuste järjekorda) testimislähenemistest (konkreetsete tunnuste kontrollimisviisidest) ning rõhutavad, et testimisstrateegia peaks olema joondatud tarkvaraarenduse elutsükliga. Käesolevas töös koosnes testistrateegia kolmest astmest:
+
+\begin{itemize}
+	\item {Üksuste testid} (ingl \emph{unit testing}\footnote{\url{https://akit.cyber.ee/term/13110-unit-testing}}) - lisati üksikute uute käskude testid, mis kontrollivad nende lokaalset semantikat. See vastab Joshi ja Kumari taksonoomia üksuste testimise tasandile.
+	\item {Integratsioonitestid} (ingl \emph{integration testing}) - koostati stsenaariumitestid terviklike väljakutsete jaoks, sealhulgas pesastatud ja rekursiivsete väljakutsete juhtumid. See vastab integratsioonitestimise tasandile, kus komponendid peavad koos korrektselt töötama.
+	\item {Regressioonitestid} (ingl \emph{regression testing}\footnote{\url{https://akit.cyber.ee/term/464-regressioonitest-regressioontestimine}}) - hoiti alles olemasolevad testid aritmeetika-, mälupöördus- ja juhtvooprogrammidele, et oleks kohe näha, kui uus lahendus rikub varasema käitumise.
+\end{itemize}
+
+Selline kolmetasandiline jaotus vastab rakendusliku töö nõudele, kus kvaliteeti ei hinnataks ainult lõpptulemuse järgi, vaid kontrollitaks süstemaatiliselt nii üksikosade kui ka tervikstsenaariumide tasandil~\cite{joshi_analyses_2022}.
+
+Töö käigus pöörati tähelepanu ka dokumenteerimisele. Arenduse igas etapis dokumenteeriti semantika realiseerimist interpretaatoris kui ka olulisemad disainiotsused, et tagada lahenduse arusaadavus. Integratsioonitestide failides otsustati dokumenteerida iga testi eesmärk ja oodatav tulemus, reasiseste kommentaaridena pandi kirja tõlgendatavate käskude seletused. Üksuste testides piirduti ainult eelnevalt mainitud reasiseste kommentaaridega.
+
+\subsection{Kasutatud tööriistad ja tehnoloogiad}\label{implementatsioon:tooriistad}
+
+Töö kahes põhiosas - tarkvaralaienduse arendamisel ja lõputöö dokumendi koostamisel - toetuti erinevatele tööriistadele ja tehnoloogiatele, mille valik tulenes otseselt projekti eripärast ja olemasolevast koodibaasist.
+
+Tarkvaralaiendus realiseeriti Java programmeerimiskeeles (versioon 21), sest kogu algne \textsc{CMa} simulaator oli juba Java keeles kirjutatud. Java kaasaegsed keelekonstruktsioonid - kirjed (\emph{records}\footnote{\url{https://akit.cyber.ee/term/461-record-2}}), suletud liidesed\footnote{\url{https://docs.oracle.com/en/java/javase/17/language/sealed-classes-and-interfaces.html}} (ingl \emph{sealed interface}) ja mustrisobitus (ingl \emph{pattern matching}) - võimaldasid uusi instruktsioone lisada kompaktselt ja tüübiturvaliselt. Projekti ehitamiseks ja sõltuvuste haldamiseks kasutati Gradle'i ehitustarkvara\footnote{\url{https://gradle.org/}}, mis kuulus algse koodibaasiga juurde. Testide kirjutamiseks ja käitamiseks kasutati JUnit~4 teegistikku\footnote{\url{https://junit.org/junit4/}}; koodibaasi navigeerimiseks ja muudatuste kavandamiseks kasutati IntelliJ IDEA arenduskeskkonda.
+
+Lõputöö dokument koostati \LaTeX{} ladumissüsteemi abil, kasutades Tartu Ülikooli arvutiteaduse instituudi avalikku bakalaureusetöö malli (\texttt{unitartucs/thesis.cls})\footnote{\url{https://github.com/sws-lab/bsc-msc-latex-template}}. Kirjandusloetelud hallati \texttt{biblatex} paketiga ning lähtekoodinäited vormistati \texttt{minted} paketiga, mis kasutab süntaksi esiletõstmiseks Pygments'i teeki\footnote{\url{https://pygments.org/}}.
+
+% TEHISINTELLEKTI KASUTAMINE
+% [Lisada siia teave selle kohta, milliseid tehisintellekti vahendeid töö kirjutamisel kasutati,
+%  kuidas neid kasutati ning mil määral mõjutas see töö sisu ja vormi.]
+
+Niisugune arhitektuuri-, nõuete- ja metoodikaanalüüs loob aluse järgmisele peatükile, kus saab juba näidata, milliste konkreetsete klasside, meetodite ja andmestruktuuride muutmise kaudu funktsioonikutsete tugi tegelikult realiseeriti.

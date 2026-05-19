@@ -1,38 +1,25 @@
-\newpage
+﻿\newpage
 \pdfbookmark[1]{\infoname}{info} % Lisame infolehe PDF-faili järjehoidjatesse.
 
 % Eesti keeles info.
 \begin{info}
 \begin{abstract}
-Siia kirjutage oma lõputöö lühikokkuvõte. See võib lühidalt teemasse sisse juhatada, kuid peaks enamikus katma ära Teie lõputöö sisu. Seda lugedes peaks olema üheselt selge, millest Teie lõputöös lugeda võib. Kirjutage eesmärgi, meetodi, tulemuste ja järelduste kohta. Bakalaureusetöö korral võiksid nii eesti kui inglise keeles olevad lühikokkuvõtted mahtuda ühele leheküljele. Magistritöö või vajaduse korral võib eesti ja inglise keeles olevad osad kirjutada eraldi lehekülgedele. Mõelge oma tööd kirjeldavad võtmesõnad ning leidke CERCS kood(id).
+Aines ``Automaadid, keeled ja translaatorid'' on \textsc{CMa} virtuaalmasina mudelit kasutatud juba mitu aastat kompilaatorite õpetamiseks, sest selle semantika sarnaneb paljudes aspektides reaalse täitmiskeskkonna tööpõhimõtetega. Bakalaureusetöö eesmärk oli laiendada \textsc{CMa} (\emph{C-Machine}) mudeli implementatsiooni, lisades olemasolevale koodibaasile funktsioonikutsete toe ja tagades, et keskkond jääb kogu käitamise vältel korrektseks. Rakendusliku uurimuse käigus analüüsiti olemasolevat implementatsiooni Javas, kavandati ja implementeeriti funktsioonikutsete mehhanism ning verifitseeriti keskkonna korrektsus, sealhulgas pesastatud ja rekursiivsete väljakutsete korral. Töö tulemusena lisati käsustikku 13 uut käsku, kirjutati ligikaudu 1251 rida uut koodi ning korrektsus verifitseeriti 46 JUnit testiga, mis katavad nii üksikute käskude kui ka pikemate programmide toimimise.
 \end{abstract}
 
-% Visuaalne kokkuvõte pole kõigil õppekavadel nõutud
-\begin{visualAbstract}
-\includegraphics[width=\textwidth]{joonised/Joonis0-VisuaalneKokkuvõte.png}
-\end{visualAbstract}
+\keywords{abstraktne masin, virtuaalmasin, \textsc{CMa}, kompilaator, funktsioonikutse, Java}
 
-\keywords{}
-
-\cercs{KOOD Koodi nimi}
-% Koodid leiate: https://www.etis.ee/Portal/Classifiers/Index/26
-% Nt: P170 Arvutiteadus, arvutusmeetodid, süsteemid, juhtimine (automaatjuhtimisteooria)
-% Nt: P175 Informaatika, süsteemiteooria
+\cercs{P175 Informaatika, süsteemiteooria}
 \end{info}
 
 
 % Inglise keeles info.
-\begin{otherInfo}{english}{Thesis Title in English}
+\begin{otherInfo}{english}{Extending the \textsc{CMa} Virtual Machine in Java to Support Function Calls}
 \begin{abstract}
-Write here the abstract of your work. The abstract could provide a brief introduction to the topic but should, in the majority, cover Your thesis work. When reading the abstract, it should become clear what can be read about in the rest of Your thesis. Write about the purpose of the thesis, method(s), results, and findings of Your work. For a bachelor’s thesis, both the Estonian and English abstracts should fit into a single page. For a master’s thesis or when necessary, the Estonian and English sections of this page could be on separate pages. Come up with good keywords for Your work and find your CERCS code(s).
+In the course ``Automata, languages and compilers'', the \textsc{CMa} virtual machine model has been used for several years in compiler education because its semantics resemble real execution environments in several important aspects. The aim of this bachelor's thesis was to extend the implementation of the \textsc{CMa} (\emph{C-Machine}) model by adding support for function calls while ensuring that the environment remained correct throughout execution. The applied research included an analysis of the existing implementation in Java, the design and implementation of a function call mechanism, and the verification of environment correctness, including nested and recursive calls. The implementation extended the instruction set with 13 new instructions, contributed approximately 1251 lines of new code, and correctness was verified by a suite of 46 JUnit tests covering the functionality of both individual instructions and complete programs.
 \end{abstract}
 
-% Visuaalne kokkuvõte pole kõigil õppekavadel nõutud
-\begin{visualAbstract}
-\includegraphics[width=\textwidth]{joonised/Joonis0-VisuaalneKokkuvõte-eng.png}
-\end{visualAbstract}
+\keywords{Abstract machine, virtual machine, \textsc{CMa}, compiler, function call, Java}
 
-\keywords{Layout, formatting, template}
-
-\cercs{CODE Code name in English}
+\cercs{P175 Informatics, systems theory}
 \end{otherInfo}

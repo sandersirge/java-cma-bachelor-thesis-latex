@@ -1,0 +1,243 @@
+﻿\section{Tööriista koodibaasi laiendamine}\label{teostus}
+
+Käesolevas peatükis kirjeldatakse, kuidas eelnevas peatükis sõnastatud nõuetest jõuti konkreetse tehnilise lahenduseni. Fookus on funktsioonikutsete realiseerimisel, täitmiskeskkonna korrektsuse säilitamisel ning näidetel, mis näitavad, kuidas laiendus mõjutab \textsc{CMa} masina käitumist tegelike täitmisstsenaariumide korral. Eesmärk ei ole üksnes loetleda muudetud klasse ja meetodeid, vaid näidata, millise loogika järgi lahendus tervikuna töötab. Peatüki tulemusel tekib alus järgmises osas esitatavate testitulemuste ja kriitilise analüüsi mõistmiseks.
+
+\subsection{Funktsioonikutsete implementeerimine}\label{teostus:funktsioonikutsed}
+
+Funktsioonikutsete realiseerimine nõudis muudatusi neljas kihis: interpretaatori olekusse lisandusid registrid, instruktsioonide tüübisüsteem laienes, pinu andmestruktuurile lisandusid operatsioonid ning interpretaatori täitmistsükkel täienes uute käskude käsitlejatega. Järgnevalt kirjeldatakse iga kihti eraldi.
+
+\subsubsection{Registrid ja olek}
+
+Algses simulaatoris puudusid registrid täielikult. Kogu olek seisnes programmiloenduris \texttt{pc} ja pinus. Funktsioonikutsete jaoks oli vaja kolme lisaregistrit, mis on defineeritud Wilhelm ja Seidli peatükis~\cite{wilhelm_imperative_2010}: viidad registrites \texttt{fp}, \texttt{ep} ja \texttt{hp}. Need lisati klassi \texttt{CMaInterpreter} privaatseteks väljadeks:
+
+\begin{minted}{java}
+private int fp = 0;  // Frame Pointer (raamiviit)
+private int ep = 0;  // Extreme Pointer (piiriviit)
+private int hp = Integer.MAX_VALUE;  // Heap Pointer (kuhjaviit)
+\end{minted}
+
+Register \texttt{fp} osutab aktiivse täitmisraami tipule. Register \texttt{ep} hoiab pinu suurima lubatud indeksi väärtust antud funktsiooni piires ning seda kasutatakse koos \texttt{hp}-ga pinu ja kuhja kokkupõrke kontrollimiseks. Register \texttt{hp} on seatud väärtusele \texttt{Integer.MAX\_VALUE}. See tagab, et peatükis nõutav kontroll \texttt{ep >= hp} on interpretaatoris olemas ja töötab korrektselt, kuid ei käivitu kunagi kogemata, sest käesolevas töös kuhja realiseerimiseni ei jõutud~\cite{wilhelm_imperative_2010}. Register \texttt{hp} jääb seega vundamendiks võimalikule edasiarendusele.
+
+\subsubsection{Instruktsioonide tüübisüsteem}
+
+Algses projektis oli instruktsioonide tüübisüsteem realiseeritud Java suletud liidesena (\emph{sealed interface}) \texttt{CMaInstruction}, mis lubas kolme implementeerijat: \texttt{CMaBasicInstruction} (ilma argumentideta), \texttt{CMaIntInstruction} (ühe täisarvulise argumendiga) ning \texttt{CMaLabelInstruction} (siltargumendiga). Uued instruktsioonid jagunesid nende olemasolevate tüüpide vahel.
+
+\begin{itemize}
+	\item Klassile \texttt{CMaBasicInstruction} lisandusid argumentideta käsud \texttt{MARK} ja \texttt{CALL}.
+	\item Klassile \texttt{CMaIntInstruction} lisandusid ühe täisarvu argumendiga käsud \texttt{ALLOC}, \texttt{LOADRC}, \texttt{LOADM}, \texttt{STOREM}, \texttt{ENTER} ja \texttt{RETURN}.
+	\item Klassile \texttt{CMaLabelInstruction} lisandus siltargumendiga käsk \texttt{JUMPI} ning \texttt{LOADLC}.
+\end{itemize}
+
+Käsud \texttt{SLIDE}, \texttt{LOADR} ja \texttt{STORER} nõudsid kaht täisarvulist argumenti, esimese puhul nihke suurust \texttt{q} ja kopeeritavate väärtuste arvu \texttt{m}. Ükski olemasolev tüüp ei toetanud kahte argumenti, mistõttu lisati uus kirjetüüp (\emph{record}) \texttt{CMaIntIntInstruction}:
+
+\begin{minted}{java}
+public record CMaIntIntInstruction(Code code, int arg1, int arg2)
+        implements CMaInstruction<CMaIntIntInstruction.Code> {
+    public enum Code { SLIDE; }
+}
+\end{minted}
+
+Suletud liides laienes neljale lubatud implementeerijale. Kuna Java kompilaator kontrollib suletud liideste ammendavust mustrisobituses, piisas uue tüübi lisamisest ning interpretaatori \emph{switch}-avaldise täiendamisest. Kompilaator teavitas koheselt, kui mõni haru oli käsitlemata.
+
+\subsubsection{Pinuoperatsioonid}
+
+Klassi \texttt{CMaStack} lisandusid kaks uut meetodit:
+
+\begin{minted}{java}
+/** Kasvata stacki m nulliga algväärtustatud pesa võrra. SP += m */
+public void allocate(int m) {
+    for (int i = 0; i < m; i++)
+        data.add(0);
+}
+
+/** Kärbi stack uuele suurusele. SP = newSize - 1 */
+public void truncate(int newSize) {
+    data.subList(newSize, data.size()).clear();
+}
+\end{minted}
+
+Meetod \texttt{allocate} teenindab \texttt{ALLOC m} käsku, mis eraldab koha lokaalsetele muutujatele täitmisraami alguses. Meetod \texttt{truncate} teenindab \texttt{RETURN} ja \texttt{SLIDE} käske, mis peavad pinu suurust vähendama. Mõlemad meetodid modifitseerivad \texttt{ArrayList} pikkust otse, ilma pinu elemente ükshaaval lisamata ja eemaldamata.
+
+\subsubsection{Uute käskude semantika interpretaatoris}
+
+Kõik uued käsud realiseeriti \texttt{CMaInterpreter} klassi \texttt{execute}-meetodisse, kus mustrisobitus eraldab instruktsiooni tüübi ja koodi.
+
+\texttt{MARK} valmistab ette täitmisraami, surudes pinule kaks organisatsioonilist väärtust.
+\begin{minted}{java}
+case MARK -> {
+    stack.push(ep);    // S[SP+1] = EP
+    stack.push(fp);    // S[SP+2] = FP
+}
+\end{minted}
+
+\texttt{CALL} aktiveerib funktsiooni, vahetades programmiloenduri ja registri FP sisu.
+\begin{minted}{java}
+case CALL -> {
+    fp = stack.size() - 1;  // FP = SP
+    int tmp = pc;
+    pc = stack.get(fp);     // PC = S[FP] (funktsiooni aadress)
+    stack.set(fp, tmp);     // S[FP] = tagastusaadress
+}
+\end{minted}
+
+\texttt{FP} seatakse selles käsus väärtusele \texttt{stack.size() - 1}. Algses projektis ei olnud eksplitsiitset \texttt{SP} registrit; selle asemel kasutatakse väljendist \texttt{stack.size() - 1} tuletatud väärtust, mis on pinuviida implitsiitne mudel. See tähendab, et kõikjal, kus spetsifikatsioon viitab $\text{SP}$-le, kasutab Java kood \texttt{stack.size() - 1}. Otsus pärines algsest projektist ning selle säilitamine väldib topeltallika (\emph{dual source of truth}) probleemi.
+
+\texttt{ENTER m} seab piirviida funktsiooni alguses, kontrollides, et pinu ei tungi kuhja alasse.
+\begin{minted}{java}
+case ENTER -> {
+    ep = stack.size() - 1 + arg;
+    if (ep >= hp)
+        throw new CMaException("Stack Overflow: EP >= HP");
+}
+\end{minted}
+
+\texttt{ALLOC m} eraldab koha lokaalsetele muutujatele.
+\begin{minted}{java}
+case ALLOC -> stack.allocate(arg);
+\end{minted}
+
+\texttt{RETURN q} taastab kutsuja keskkonna ja puhastab täitmisraami.
+\begin{minted}{java}
+case RETURN -> {
+    pc = stack.get(fp);            // taasta tagastusaadress
+    ep = stack.get(fp - 2);        // taasta vana EP
+    if (ep >= hp) throw new CMaException("Stack Overflow");
+    int newSp = fp - arg;          // SP = FP - q
+    int newFp = stack.get(fp - 1); // taasta vana FP
+    stack.truncate(newSp + 1);     // kärbi stack: size = SP + 1
+    fp = newFp;
+}
+\end{minted}
+
+Implitsiitse \texttt{SP} tehniline detail seisneb selles, et kutse \texttt{stack.truncate(newSp + 1)} kasutab argumendina $\text{FP} - q + 1$, mitte $\text{FP} - q$. Põhjuseks on, et \texttt{truncate} võtab parameetriks pinu uue suuruse, kuid \texttt{SP} on nullitud. Kui $\text{SP} = \text{FP} - q$, siis pinusse peab jääma $\text{SP} + 1$ elementi. See $+1$ nihe mõjutab tulemust. Vale väärtus tähendaks kas ühe elemendi liiga palju või liiga vähe kärbitud pinu, mis avaldub alles mitmekordsel pesastatud väljakutsel.
+
+\texttt{LOADRC j}, \texttt{LOADR j m} ja \texttt{STORER j m} realiseerivad FP-suhtelise pöördumise.
+\begin{minted}{java}
+case LOADRC -> stack.push(fp + arg);
+case LOADR  -> { /* LOADRC j; LOAD m */ }
+case STORER -> { /* LOADRC j; STORE m*/ }
+\end{minted}
+
+\texttt{LOADLC j} laadib pinule sildi (label) aadressi, võimaldades dünaamilist aadresside käsitlemist. Seda käsku kasutatakse näiteks juhul, kui on vaja salvestada või edastada programmi sees mõne sildi asukohta, mitte kohe sinna hüpata.
+\begin{minted}{java}
+case LOADLC -> stack.push(getLabelTarget(label));
+\end{minted}
+
+\texttt{LOADR} ja \texttt{STORER} on realiseeritud rekursiivselt. Need kutsuvad \texttt{execute}-meetodit teise instruktsiooniga, mis väldib loogika dubleerimist ja hoiab koodi kooskõlas peatüki kompositsioonilise definitsiooniga~\cite{wilhelm_imperative_2010}.
+
+\texttt{SLIDE q m} nihutab \texttt{m} pealmist väärtust \texttt{q} positsiooni allapoole.
+\begin{minted}{java}
+case SLIDE -> {
+    if (arg1 > 0) {
+        int sp = stack.size() - 1;
+        if (arg2 == 0) {
+            stack.truncate(sp - arg1 + 1);
+        } else {
+            sp = sp - arg1 - arg2;
+            for (int i = 0; i < arg2; i++) {
+                sp++;
+                stack.set(sp, stack.get(sp + arg1));
+            }
+            stack.truncate(sp + 1);
+        }
+    }
+}
+\end{minted}
+
+Käsku kasutatakse peamiselt funktsiooni tagastusväärtuse kättesaamiseks. Pärast \texttt{RETURN}-i jäävad parameetrite pesad pinule alles ning \texttt{SLIDE 0 1} nihutab tulemuse paremale kohale.
+
+\texttt{JUMPI} realiseerib indekseeritud hüppe \emph{switch}-avaldise jaoks.
+\begin{minted}{java}
+case JUMPI -> {
+    pc = getLabelTarget(label) + stack.pop();
+}
+\end{minted}
+
+Käsk lisab pinult loetud indeksi hüppetabeli baasaadressile, võimaldades konstantse ajaga harude valikut.
+
+\subsection{Keskkonna korrektsuse tagamine}\label{teostus:keskkond}
+
+Interpretaatori laiendamisel oli vaja tagada, et pinu, registrid ja täitmisraamid jäävad korrektseks ka pesastatud ja rekursiivsete väljakutsete korral. Selles jaotises kirjeldatakse kolme põhilist korrektsusaspekti: implitsiitse pinuviida järjepidevust, täitmisraamide piiride jälgitavust ning sentinell-\texttt{hp} rolli.
+
+\subsubsection{Implitsiitne pinuviit ja \texttt{truncate} semantika}
+
+Algses projektis realiseeriti pinuviit implitsiitselt: $\text{SP} = \texttt{stack.size()} - 1$, ilma eraldi \texttt{sp} registrita. See tähendab, et igal pool, kus spetsifikatsioon muudab $\text{SP}$ väärtust (nt $\text{SP} \gets \text{SP} + 1$ käsul \texttt{PUSH}), muudab Java kood pinu suurust (nt \texttt{data.add(value)}). Pinu suurendamine on triviaalne. \texttt{push} ja \texttt{allocate} lisavad elemente listi lõppu. Pinu vähendamine nõuab \texttt{truncate}-operatsiooni, mis eemaldab elemente listi lõpust.
+
+Korrektsuse võtmekoht on \texttt{truncate} argumendi arvutamine. Reegel on, et kui spetsifikatsioon seab $\text{SP} = x$, siis Java kood kutsub \texttt{stack.truncate(x + 1)}, sest listi suurus on ühe võrra suurem kui viimase elemendi indeks. Reeglit kohaldati järjepidevalt kõigis kolmes kohas, kus pinu vähendamine toimub:
+\begin{itemize}
+	\item \texttt{RETURN q}: \texttt{stack.truncate(fp - q + 1)}, sest $\text{SP} = \text{FP} - q$.
+	\item \texttt{SLIDE q 0}: \texttt{stack.truncate(sp - q + 1)}, sest $\text{SP} = \text{SP} - q$.
+	\item \texttt{SLIDE q m} ($m > 0$): \texttt{stack.truncate(sp + 1)} pärast tsüklit, kus \texttt{sp} on juba nihkunud.
+\end{itemize}
+
+\subsubsection{Pesastatud väljakutsed ja raamide ahel}
+
+Iga \texttt{MARK}/\texttt{CALL} paar loob pinule uue täitmisraami, mis sisaldab kolme organisatsioonilist pesa. Nendeks on salvestatud \texttt{EP}, salvestatud \texttt{FP} ja tagastusaadress. Pesastatud ja rekursiivsete väljakutsete korral moodustavad \texttt{FP} väärtused ahela. Aktiivse raami \texttt{FP-1} pesast leiab kutsuja \texttt{FP} väärtuse ning analoogselt saab seda järgida iga järgneva kutse korral. Seda aheldamist ei pea interpretaatoris eraldi realiseerima. See tekib automaatselt \texttt{MARK}-i ja \texttt{RETURN}-i koostoimest.
+
+\texttt{RETURN q} taastab kutsuja keskkonna vastupidises järjekorras. Kõigepealt loetakse \texttt{fp}-st tagastusaadress ja vana \texttt{EP}, siis \texttt{fp - 1}-st vana \texttt{FP}. Alles seejärel kärbitakse pinu ja seatakse \texttt{fp} uuele väärtusele. Seda järjekorda on oluline järgida, sest \texttt{fp}-d muutes enne pinu kärbimist muutuksid vanade väärtuste aadressid valeks.
+
+\subsubsection{Sentinell-HP}
+
+Register \texttt{hp} on seatud väärtusele \texttt{Integer.MAX\_VALUE} (arvuliselt ${2^{31} - 1}$). Eelmainitu tagab, et \texttt{ENTER} ja \texttt{RETURN} instruktsioonides olev kontroll \texttt{ep >= hp} annab alati \texttt{false}, sest ükski reaalne pinuindeks ei saa seda väärtust ületada. Peatüki semantika nõuab seda kontrolli mõlemas kohas~\cite{wilhelm_imperative_2010}, mistõttu oleks selle toimingu algsest implementatsioonist välja jätmine tekitanud semantilise kõrvalekalde. Sentinellväärtus võimaldab kirjutada \texttt{ENTER} ja \texttt{RETURN} lõplikul kujul, järgides peatüki semantikat~\cite{wilhelm_imperative_2010}.
+
+\subsection{Tehnilised lahendused ja näidised}\label{teostus:naidised}
+
+Järgnevas jaotises näidatakse kahte integratsioonistsenaariumit, mis demonstreerivad kõigi uute käskude koostoimet tervikliku programmi raames.
+
+\subsubsection{Näide 1: rekursiivne faktoriaali arvutamine}
+
+Esimene stsenaariumitest realiseerib rekursiivse faktoriaali funktsiooni. C-keeles vastaks see programmile:
+
+\begin{minted}{c}
+int fac(int n) {
+    if (n <= 0) return 1;
+    return n * fac(n - 1);
+}
+int run(int n) {
+    int r = fac(n);
+    return r;
+}
+\end{minted}
+
+Selle programmi \textsc{CMa} realisatsioon koosneb kolmest osast: peaprogramm (mis kutsub \texttt{run}), \texttt{run}-funktsioon (mis eraldab lokaalse muutuja ja kutsub \texttt{fac}) ning \texttt{fac}-funktsioon (mis valib baas- ja rekursiivse haru vahel). Kokku moodustub 37-instruktsioonine programm, mis kasutab kõiki põhilisi uusi käske.
+
+\begin{itemize}
+	\item \texttt{MARK} ja \texttt{CALL} valmistavad ette täitmisraami ja aktiveerivad funktsiooni.
+	\item \texttt{ENTER m} seab piirviida, kusjuures \texttt{run}-i puhul on $m = 1$ ja \texttt{fac}-i puhul $m = 0$.
+	\item \texttt{ALLOC 1} eraldab \texttt{run}-is koha ühele lokaalsele muutujale \texttt{r}.
+	\item \texttt{LOADR j} ja \texttt{STORER j} loevad ja kirjutavad parameetreid ning lokaalseid muutujaid.
+	\item \texttt{RETURN 3} puhastab täitmisraami kolme organisatsioonilise pesa võrra (parameeter, EP ja FP).
+	\item \texttt{SLIDE 0 1} nihutab tagastusväärtuse parameetri pesa kohale.
+\end{itemize}
+
+Rekursiivse \texttt{fac(5)} puhul tekib viis pesastatud täitmisraami, millest igaüks sisaldab oma \texttt{FP} väärtuse ja tagastusaadressi. Pinu kasvab maksimaalselt 24 elemendini (peaprogrammi 3 organisatsioonilist pesa $+$ \texttt{run}-i raam $+$ 5 \texttt{fac}-raami) ning iga \texttt{RETURN} kärbib raami ja taastab kutsuja keskkonna. Testi lõpptulemus on $5! = 120$ ning pinu sisaldab ainult seda ühte väärtust: \texttt{[120]}.
+
+\subsubsection{Näide 2: mitme haruga lülituslause}
+
+Teine stsenaariumitest demonstreerib keerulisemat programmi, mis kasutab lisaks eelmistele käskudele ka \texttt{LOADRC}-d (suhteline aadress ilma mälupöörduseta), \texttt{JUMPI}-d (indekseeritud hüpe) ning \texttt{SLIDE 0 1} (mitteoperatsioon, kuna \texttt{RETURN 4} paigutab tagastusväärtuse juba õigele kohale). C-keeles vastaks see programmile:
+
+\begin{minted}{c}
+int inc(int x, int step) { return x + step; }
+int run(int op) {
+    int n = 5;
+    int r;
+    switch (op) {
+        case 0: r = inc(n, 1); break;
+        case 1: r = n * 2;     break;
+    }
+    return r;
+}
+\end{minted}
+
+Selle programmi \textsc{CMa} realisatsioon on 39-instruktsioonine ning demonstreerib mitmeid teostuse aspekte, mida faktoriaalinäide ei kata:
+
+\begin{itemize}
+	\item {Mitmeparameetriline funktsioon} \texttt{inc(x, step)} saab kaks parameetrit. Funktsiooni sees pöördutakse parameetrite poole indeksitega \texttt{FP-4} (esimene parameeter \texttt{x}) ja \texttt{FP-3} (teine parameeter \texttt{step}). See on kooskõlas peatüki paigutusega, kus organisatsioonilised pesad (EP, FP, tagastusaadress) paiknevad parameetrite ja lokaalsete muutujate vahel~\cite{wilhelm_imperative_2010}.
+	\item \texttt{RETURN 4} eemaldab lisaks kolmele organisatsioonilisele pesale ka teise parameetri \texttt{step} pesa, jättes tagastusväärtuse otse \texttt{x}-pesa kohale. \texttt{SLIDE 0 1} on seega mitteoperatsioon. Tulemus on pärast \texttt{RETURN 4}-i juba õigel kohal.
+	\item {Indekseeritud hüpe} \texttt{JUMPI \_table} loeb pinult operandi \texttt{op} ja liidab selle hüppetabeli baasaadressile. Tabelis on kaks \texttt{JUMP}-käsku, mis suunavad vastavatesse harudesse.
+	\item {\texttt{LOADRC} otsekasutus} harus 0 kasutatakse \texttt{LOADRC 1} koos järgneva \texttt{LOAD}-iga, et lugeda lokaalse muutuja \texttt{n} väärtus. See on sama, mis \texttt{LOADR 1}, kuid lammutatud kaheks eraldi käsuks näitamaks, et \texttt{LOADR} on käskudele \texttt{LOADRC} ja \texttt{LOAD}-ile toetuv käsk.
+\end{itemize}
+
+Testi tulemused on: \texttt{op=0} annab \texttt{inc(5, 1) = 6} ning \texttt{op=1} annab \texttt{5 * 2 = 10}. Mõlemal juhul sisaldab pinu lõplikus seisus ainult ühte väärtust, mis kinnitab, et \texttt{SLIDE}, \texttt{RETURN} ja \texttt{MARK}/\texttt{CALL} koostoime puhastab kõik vahepealsed väärtused korrektselt.
+
+Need kaks integratsioonistsenaariumit koos peatükis~\ref{tulemused} esitatavate üksuste testidega moodustavad testimistrateegia teise ja kolmanda tasandi vastavalt jaotises~\ref{implementatsioon:nouded} kirjeldatud kolmetasandilisele skeemile. Järgmises peatükis esitatakse testide koondtulemused ning analüüsitakse, kuivõrd lahendus vastab sõnastatud nõuetele.

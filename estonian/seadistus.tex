@@ -2,20 +2,16 @@
 % Värvid
 \definecolor{colorCellHighlight}{rgb}{0.85, 0.91, 0.97} % Nii saab defineerida oma värve
 
+% Loendite vormindamine (description, enumerate, itemize)
+\usepackage{enumitem}
 
-% Viited
-% Siin saate valida viitamisstiili
+% Ujuvelementide täpne paigutus ([H] - kohustuslik koht)
+\usepackage{float}
 
-% ACM-stiilis numbriline viitamine [1], tähestikulises järjekorras viited.
-% \usepackage[style=unitartucs/citations/numeric]{biblatex}
+% Kataloogistruktuuride kuvamine
+\usepackage{dirtree}
 
 % IEEE-stiilis numbriline viitamine [1], viitamise järjekorras viited.
 \usepackage[style=unitartucs/citations/numeric,sorting=none]{biblatex}
-
-% AMS-stiilis trigraafiline viitamine [ABC], tähestikulises järjekorras viited.
-% \usepackage[style=unitartucs/citations/alphabetic]{biblatex}
-
-% APA-stiilis viitamine (Koit 2010), tähestikulises järjekorras viited.
-% \usepackage[style=unitartucs/citations/authoryear,uniquename=init]{biblatex}
 
 \addbibresource{estonian/viited.bib} % Selles failis on Teie bibliograafia kirjed

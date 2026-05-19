@@ -1,0 +1,45 @@
+﻿\subsection*{Lisa A. Projekti kataloogistruktuur}\label{lisa:projektistruktuur}
+\addcontentsline{toc}{subsection}{Lisa A. Projekti kataloogistruktuur}
+
+Järgnevalt on esitatud repositooriumi \texttt{java-cma-bachelor-thesis} kataloogistruktuur. Välja on jäetud Gradle'i vahefailid (\texttt{build/}, \texttt{.gradle/}), IDE konfiguratsioonifailid (\texttt{.idea/}) ning kompileeritud klassifailid (\texttt{bin/}).
+
+\dirtree{%
+  .1 java-cma-bachelor-thesis/.
+  .2 .github/.
+  .3 workflows/.
+  .4 gradle.yml.
+  .2 cmas/.
+  .3 demo.cma.
+  .2 gradle/.
+  .3 wrapper/.
+  .4 gradle-wrapper.properties.
+  .2 src/.
+  .3 main/.
+  .4 java/.
+  .5 ee/ut/cs/sws/cma/.
+  .6 CMaDemo.java.
+  .6 CMaException.java.
+  .6 CMaInterpreter.java.
+  .6 CMaLabel.java.
+  .6 CMaProgram.java.
+  .6 CMaProgramParser.java.
+  .6 CMaProgramWriter.java.
+  .6 CMaStack.java.
+  .6 CMaUtils.java.
+  .6 instruction/.
+  .7 CMaBasicInstruction.java.
+  .7 CMaInstruction.java.
+  .7 CMaIntInstruction.java.
+  .7 CMaIntIntInstruction.java.
+  .7 CMaLabelInstruction.java.
+  .3 test/.
+  .4 java/.
+  .5 ee/ut/cs/sws/cma/.
+  .6 CMaInterpreterTest.java.
+  .6 CMaInterpreterIntegrationTest.java.
+  .2 build.gradle.
+  .2 gradlew.
+  .2 gradlew.bat.
+  .2 settings.gradle.
+  .2 .gitignore.
+}
